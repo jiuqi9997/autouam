@@ -43,10 +43,14 @@ api_url2="https://api.cloudflare.com/client/v4/zones/$zone_id/filters"
 # 安装依赖
 if [ ! $(which jq 2> /dev/null) ]; then
     echo "jq not found!"
-    if [ -f "/usr/bin/yum" ] && [ -d "/etc/yum.repos.d" ]; then
-        yum install jq -y
-    elif [ -f "/usr/bin/apt-get" ] && [ -f "/usr/bin/dpkg" ]; then
-        apt-get install jq -y
+    if [ -f "/usr/bin/apt-get" ]; then
+        apt-get install -y jq
+    elif [ -f "/usr/bin/dnf" ]; then
+        dnf install -y epel-release
+        dnf install -y jq
+    elif [ -f "/usr/bin/yum" ]; then
+        yum install -y epel-release
+        yum install -y jq
     fi
 fi
 
