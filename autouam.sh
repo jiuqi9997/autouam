@@ -8,7 +8,7 @@
 #
 
 mode="load"
-# 两种模式可选，一：cpu 二：load
+# 两种模式可选，一：load (负载) 二：cpu
 
 challenge="1"
 # 是否同时开启验证码质询 设为1即开启
@@ -30,6 +30,10 @@ zone_id="눈_눈"
 
 default_security_level="high"
 # 默认安全等级 关闭UAM时将会把安全等级调整为它
+
+check=""
+#自定义开盾阈值（非必需）
+#load模式填负载值 如:8  cpu模式填百分数值 如:90
 
 api_url="https://api.cloudflare.com/client/v4/zones/$zone_id/settings/security_level"
 # API的地址
@@ -57,7 +61,7 @@ fi
 for((;;))
 do
 if [[ "$mode" == "cpu" ]]; then
-    check=90   #5秒内CPU连续超过80 则开启UAM【可以根据您的服务器负荷情况调整】
+    check=${check:-90}
     #系统空闲时间
     TIME_INTERVAL=5
     time=$(date "+%Y-%m-%d %H:%M:%S")
@@ -76,7 +80,7 @@ if [[ "$mode" == "cpu" ]]; then
     load=`echo ${SYSTEM_IDLE} ${TOTAL_TIME} | awk '{printf "%.2f", 100-$1/$2*100}'`
 else
     load=$(cat /proc/loadavg | colrm 5)
-    check=$(cat /proc/cpuinfo | grep "processor" | wc -l)
+    check=${check:-$(cat /proc/cpuinfo | grep "processor" | wc -l)}
 fi
 
 
