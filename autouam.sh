@@ -41,14 +41,14 @@ api_url2="https://api.cloudflare.com/client/v4/zones/$zone_id/filters"
 # API的地址之三
 
 # 安装依赖
-if [ ! $(which jq 2> /dev/null) ]; then
+if ! which jq &> /dev/null; then
     echo "jq not found!"
-    if [ -f "/usr/bin/apt-get" ]; then
+    if [[ -f "/usr/bin/apt-get" ]]; then
         apt-get install -y jq
-    elif [ -f "/usr/bin/dnf" ]; then
+    elif [[ -f "/usr/bin/dnf" ]]; then
         dnf install -y epel-release
         dnf install -y jq
-    elif [ -f "/usr/bin/yum" ]; then
+    elif [[ -f "/usr/bin/yum" ]]; then
         yum install -y epel-release
         yum install -y jq
     fi
@@ -56,65 +56,67 @@ fi
 
 for((;;))
 do
-if [ "$mode" = "cpu" ];
-then
-check=90   #5秒内CPU连续超过80 则开启UAM【可以根据您的服务器负荷情况调整】
-#系统空闲时间
-TIME_INTERVAL=5
-time=$(date "+%Y-%m-%d %H:%M:%S")
-LAST_CPU_INFO=$(cat /proc/stat | grep -w cpu | awk '{print $2,$3,$4,$5,$6,$7,$8}')
-LAST_SYS_IDLE=$(echo $LAST_CPU_INFO | awk '{print $4}')
-LAST_TOTAL_CPU_T=$(echo $LAST_CPU_INFO | awk '{print $1+$2+$3+$4+$5+$6+$7}')
-sleep ${TIME_INTERVAL}
-NEXT_CPU_INFO=$(cat /proc/stat | grep -w cpu | awk '{print $2,$3,$4,$5,$6,$7,$8}')
-NEXT_SYS_IDLE=$(echo $NEXT_CPU_INFO | awk '{print $4}')
-NEXT_TOTAL_CPU_T=$(echo $NEXT_CPU_INFO | awk '{print $1+$2+$3+$4+$5+$6+$7}')
+if [[ "$mode" == "cpu" ]]; then
+    check=90   #5秒内CPU连续超过80 则开启UAM【可以根据您的服务器负荷情况调整】
+    #系统空闲时间
+    TIME_INTERVAL=5
+    time=$(date "+%Y-%m-%d %H:%M:%S")
+    LAST_CPU_INFO=$(cat /proc/stat | grep -w cpu | awk '{print $2,$3,$4,$5,$6,$7,$8}')
+    LAST_SYS_IDLE=$(echo $LAST_CPU_INFO | awk '{print $4}')
+    LAST_TOTAL_CPU_T=$(echo $LAST_CPU_INFO | awk '{print $1+$2+$3+$4+$5+$6+$7}')
+    sleep ${TIME_INTERVAL}
+    NEXT_CPU_INFO=$(cat /proc/stat | grep -w cpu | awk '{print $2,$3,$4,$5,$6,$7,$8}')
+    NEXT_SYS_IDLE=$(echo $NEXT_CPU_INFO | awk '{print $4}')
+    NEXT_TOTAL_CPU_T=$(echo $NEXT_CPU_INFO | awk '{print $1+$2+$3+$4+$5+$6+$7}')
 
-#系统空闲时间
-SYSTEM_IDLE=`echo ${NEXT_SYS_IDLE} ${LAST_SYS_IDLE} | awk '{print $1-$2}'`
-#CPU总时间
-TOTAL_TIME=`echo ${NEXT_TOTAL_CPU_T} ${LAST_TOTAL_CPU_T} | awk '{print $1-$2}'`
-load=`echo ${SYSTEM_IDLE} ${TOTAL_TIME} | awk '{printf "%.2f", 100-$1/$2*100}'`
+    #系统空闲时间
+    SYSTEM_IDLE=`echo ${NEXT_SYS_IDLE} ${LAST_SYS_IDLE} | awk '{print $1-$2}'`
+    #CPU总时间
+    TOTAL_TIME=`echo ${NEXT_TOTAL_CPU_T} ${LAST_TOTAL_CPU_T} | awk '{print $1-$2}'`
+    load=`echo ${SYSTEM_IDLE} ${TOTAL_TIME} | awk '{printf "%.2f", 100-$1/$2*100}'`
 else
-load=$(cat /proc/loadavg | colrm 5)
-check=$(cat /proc/cpuinfo | grep "processor" | wc -l)
+    load=$(cat /proc/loadavg | colrm 5)
+    check=$(cat /proc/cpuinfo | grep "processor" | wc -l)
 fi
 
-if [ ! -f "status.txt" ];then
-echo "" > status.txt
+
+if [[ ! -f "status.txt" ]]; then
+    echo "" > status.txt
 else
-status=$(cat status.txt)
+    status=$(cat status.txt)
 fi
-if [ -f "ruleid.txt" ]; then
-ruleid=$(cat ruleid.txt)
+
+if [[ -f "ruleid.txt" ]]; then
+    ruleid=$(cat ruleid.txt)
 fi
-if [ -f "filterid.txt" ]; then
-filterid=$(cat filterid.txt)
+
+if [[ -f "filterid.txt" ]]; then
+    filterid=$(cat filterid.txt)
 fi
+
+
 now=$(date +%s)
 time=$(date +%s -r status.txt)
 
 
 
 echo "当前$mode负载:$load"
-if [[ $status -eq 1 ]]
-then
-echo "UAM ON!"
-if [ "$challenge" -eq 1 ]; then
-echo "Challenge ON!"
-fi
+if [[ $status -eq 1 ]]; then
+    echo "UAM ON!"
+    if [[ "$challenge" -eq 1 ]]; then
+        echo "Challenge ON!"
+    fi
 else
-echo "UAM OFF!"
-if [ "$challenge" -eq 1 ]; then
-echo "Challenge OFF!"
-fi
+    echo "UAM OFF!"
+    if [[ "$challenge" -eq 1 ]]; then
+        echo "Challenge OFF!"
+    fi
 fi
 
 newtime=`expr $now - $time`
 closetime=`expr $keeptime - $newtime`
 
-if [[ $load <$check ]]&&[[ $status -eq 1 ]]&&[[ $newtime -gt $keeptime ]]
-then
+if [[ $(awk 'BEGIN {print ('$load'<'$check') ? 1:0}') -eq 1 ]] && [[ $status -eq 1 ]] && [[ $newtime -gt $keeptime ]]; then
     echo -e "\n$mode负载低于$check，当前已开盾超过规定时间$newtime秒，尝试调整至默认安全等级（$default_security_level）"
     # Disable Under Attack Mode
     result=$(curl -X PATCH "$api_url" \
@@ -125,11 +127,11 @@ then
             \"value\": \"$default_security_level\"
         }" --silent \
     | jq -r '.success')
-    if [ "$result" = "true" ]; then
+    if [[ "$result" = "true" ]]; then
         echo 0 > status.txt
         echo -e "\n成功"
     fi
-    if [ "$challenge" -eq 1 ]; then
+    if [[ "$challenge" -eq 1 ]]; then
         result=$(curl -X DELETE "$api_url1/$ruleid" \
             -H "X-Auth-Email: $email" \
             -H "X-Auth-Key: $api_key" \
@@ -140,27 +142,20 @@ then
             -H "X-Auth-Key: $api_key" \
             -H "Content-Type: application/json" \
             --silent)
-        if [ $(echo $result | jq -r '.success') -a $(echo $result1 | jq -r '.success') ]; then
+        if echo $result | jq -e '.success' && echo $result1 | jq -e '.success'; then
             echo -e "\n验证码关闭成功"
         fi
     fi
-
-elif [[ $load <$check ]]
-then
+elif [[ $(awk 'BEGIN {print ('$load'<'$check') ? 1:0}') -eq 1 ]]; then
     echo -e "\n$mode负载低于$check，不做任何改变，状态持续了$newtime秒"
-    if [[ $status -eq 1 ]]
-    then
+    if [[ $status -eq 1 ]]; then
         echo -e "将于$closetime秒后调整安全等级至$default_security_level"
     fi
-
-elif [[ $load >$check ]] && [[ $status -eq 1 ]] && [[ $newtime -gt $keeptime ]]
-then
+elif [[ $(awk 'BEGIN {print ('$load'>'$check') ? 1:0}') -eq 1 ]] && [[ $status -eq 1 ]] && [[ $newtime -gt $keeptime ]]; then
     echo -e "\n$mode负载高于$check，当前已开启UAM超过$keeptime秒，UAM无效"
-elif [[ $load >$check ]] && [[ $status -eq 1 ]]
-then
+elif [[ $(awk 'BEGIN {print ('$load'>'$check') ? 1:0}') -eq 1 ]] && [[ $status -eq 1 ]]; then
     echo -e "\n$mode负载高于$check，当前已开启($newtime秒)，请再观察"
-elif [[ $load >$check ]]
-then
+elif [[ $(awk 'BEGIN {print ('$load'>'$check') ? 1:0}') -eq 1 ]]; then
     echo -e "\n$mode负载高于$check，开启UAM"
     # Enable Under Attack Mode
     result=$(curl -X PATCH "$api_url" \
@@ -171,11 +166,11 @@ then
                 \"value\": \"under_attack\"
             }" --silent \
     | jq -r '.success')
-    if [ "$result" = "true" ]; then
+    if [[ "$result" = "true" ]]; then
         echo 1 > status.txt
         echo -e "\n成功"
     fi
-    if [ "$challenge" -eq 1 ]; then
+    if [[ "$challenge" -eq 1 ]]; then
         while :
             do
             result=$(curl -X POST "$api_url2" \
@@ -185,7 +180,7 @@ then
                 --data '[{
                     "expression": "(not cf.client.bot)"
                 }]' --silent)
-            if [ $(echo $result | jq -r '.success') == "true" ]; then
+            if echo $result | jq -e '.success'; then
                 filterid=$(echo $result | jq -r '.result[].id')
             else
                 filterid=$(echo $result | jq -r '.errors[].meta.id')
@@ -196,13 +191,11 @@ then
                     -H "X-Auth-Key: $api_key" \
                     -H "Content-Type: application/json" --silent)
                 done
-                if [ $(echo $result1 | jq -r '.success') ]; then
+                if echo $result1 | jq -e '.success'; then
                     echo "\n冲突的filter删除成功"
                 fi
             fi
-            if [ $(echo $result | jq -r '.success') == "true" ]; then
-                break
-            fi
+            echo $result | jq -e '.success' && break
         done
         result=$(curl -X POST "$api_url1" \
             -H "X-Auth-Email: $email" \
@@ -215,7 +208,7 @@ then
                     \"expression\": \"(not cf.client.bot)\"
                 }
             }]" --silent)
-        if [ $(echo $result | jq -r '.success') == "true" ]; then
+        if echo $result | jq -e '.success'; then
             ruleid=$(echo $result | jq -r '.result[].id')
             echo "$filterid" > filterid.txt
             echo "$ruleid" > ruleid.txt
@@ -223,7 +216,7 @@ then
         fi
     fi
 else
-echo 0 > status.txt
+    echo 0 > status.txt
 fi
 sleep $interval
 clear
